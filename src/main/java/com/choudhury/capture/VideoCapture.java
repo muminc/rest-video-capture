@@ -31,14 +31,10 @@ public class VideoCapture {
     public static void main(String[] args) {
         try {
             VideoCapture videoCapture = new VideoCapture(AVIOutputStream.VideoFormat.JPG, 24, 0.9f, "My Project", "Super Duper Test", "c:\\temp\\output.mp4");
-            System.out.println("videoCapture = " + videoCapture.getTempVideoPath().getAbsolutePath());
             videoCapture.outputIntro();
             videoCapture.captureScreen();
             videoCapture.outputExit();
             videoCapture.close();
-
-            // runFFMpeg(videoFile.getAbsolutePath());
-
         } catch (Exception ex) {
             ex.printStackTrace();
         }
@@ -61,19 +57,16 @@ public class VideoCapture {
         this.passed = passed;
     }
 
-    public File getTempVideoPath() {
-        return tempVideoPath;
-    }
+
 
     public void runFFMpeg() throws IOException, InterruptedException {
 
         ProcessBuilder pb = new ProcessBuilder("cmd", "/C start /B  /WAIT ffmpeg -threads 2 -i " + tempVideoPath.getAbsolutePath() + " -vcodec libx264 -b 3000k -r 24 -y " + this.targetVideoPath);
         pb.start();
-        System.out.println("Before start");
         Process start = pb.start();
         pipeOutput(start);
         int result = start.waitFor();
-        System.out.println("Exit result " + result);
+        System.out.println("Exit code " + result);
     }
 
     private static void pipeOutput(Process process) {
