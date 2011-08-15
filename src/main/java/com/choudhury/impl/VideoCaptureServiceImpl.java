@@ -29,7 +29,7 @@ public class VideoCaptureServiceImpl implements VideoCaptureService {
 
 
     public void startRecording(String projectName, String title, String fileName) throws IOException {
-        VideoCapture videoCapture = new VideoCapture(AVIOutputStream.VideoFormat.JPG, 24, 0.9f, projectName, title, fileName);
+        VideoCapture videoCapture = new VideoCapture(AVIOutputStream.VideoFormat.JPG, 24, 0.9f, projectName, title, fileName,true);
         map.put(fileName, videoCapture);
         videoCapture.outputIntro();
         videoCapture.captureScreen();

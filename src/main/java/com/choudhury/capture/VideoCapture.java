@@ -27,12 +27,14 @@ public class VideoCapture {
     private boolean passed;
     private Lock videoLock;
     private boolean captureVideo = false;
+    private boolean useFFMpeg=false;
 
     public static void main(String[] args) {
         try {
-            VideoCapture videoCapture = new VideoCapture(AVIOutputStream.VideoFormat.JPG, 24, 0.9f, "My Project", "Super Duper Test", "c:\\temp\\output.mp4");
+            VideoCapture videoCapture = new VideoCapture(AVIOutputStream.VideoFormat.JPG, 24, 0.9f, "My Project", "Super Duper Test", "c:\\temp\\outputMumin.mp4",false);
             videoCapture.outputIntro();
             videoCapture.captureScreen();
+            Thread.sleep(10000);
             videoCapture.outputExit();
             videoCapture.close();
         } catch (Exception ex) {
@@ -40,15 +42,15 @@ public class VideoCapture {
         }
     }
 
-    public VideoCapture(AVIOutputStream.VideoFormat format, int depth, float quality, String projectName, String testName, String targetVideoPath) throws IOException {
+    public VideoCapture(AVIOutputStream.VideoFormat format, int depth, float quality, String projectName, String testName, String targetVideoPath, boolean useFFMpeg) throws IOException {
         this.format = format;
         this.depth = depth;
         this.quality = quality;
         this.projectName = projectName;
         this.testName = testName;
+        this.useFFMpeg = useFFMpeg;
         this.targetVideoPath = targetVideoPath.replaceAll("\\|","/");
         this.tempVideoPath = File.createTempFile("atvideo", ".avi");
-        this.tempVideoPath.deleteOnExit();
         this.videoLock = new ReentrantLock();
         this.prepareVideo();
     }
@@ -114,9 +116,17 @@ public class VideoCapture {
             if (aviOuput != null) {
                 aviOuput.close();
             }
-            runFFMpeg();
+            if (useFFMpeg)
+            {
+                runFFMpeg();
+                this.tempVideoPath.delete();
+            }
+            else
+            {
+                tempVideoPath.renameTo(new File(this.targetVideoPath));
+            }
             aviOuput = null;
-            tempVideoPath.delete();
+
         } finally {
             videoLock.unlock();
         }
