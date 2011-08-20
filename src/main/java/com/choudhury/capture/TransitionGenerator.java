@@ -9,36 +9,54 @@ public class TransitionGenerator {
 
     private BufferedImage firstImage;
     private BufferedImage secondImage;
+    private TransitionDirection direction;
+    private SlideType slideType;
 
-    public TransitionGenerator(BufferedImage firstImage, BufferedImage secondImage) {
+    public TransitionGenerator(BufferedImage firstImage, BufferedImage secondImage, TransitionDirection direction, SlideType slideType) {
         this.firstImage = firstImage;
         this.secondImage = secondImage;
+        this.direction = direction;
+        this.slideType = slideType;
     }
 
-    public List<ImageTime> generateImages(int imageCount)
-    {
-        int width=firstImage.getWidth();
-        int height=firstImage.getHeight();
+    public List<ImageTime> generateImages(int imageCount) {
+        int width = firstImage.getWidth();
+        int height = firstImage.getHeight();
+        final BufferedImage bottomImage, topImage;
+        if (slideType == SlideType.SLIDE_OVER) {
+            bottomImage = secondImage;
+            topImage = firstImage;
+        } else {
+            bottomImage = firstImage;
+            topImage = secondImage;
+        }
 
-        ArrayList<ImageTime> images=new ArrayList<ImageTime>();
-        for (int i=0; i<imageCount; i++)
-        {
+        ArrayList<ImageTime> images = new ArrayList<ImageTime>();
+        for (int i = 0; i < imageCount; i++) {
             BufferedImage image = createImage(width, height);
             Graphics2D graphics = image.createGraphics();
-            float percentage=i/(float)imageCount;
-            int startX=(int)(width*percentage);
-            graphics.drawImage(secondImage,0,0,null);
-            graphics.drawImage(firstImage,startX,0,null);
+            float percentage = i / (float) imageCount;
+            int startX;
+            if (direction == TransitionDirection.FORWARD) {
+                startX = (int) (width * percentage);
+                graphics.drawImage(bottomImage, 0, 0, null);
+                graphics.drawImage(topImage, startX, 0, null);
+            }
+            else
+            {
+                startX=(int)(width-(width*percentage));
+                graphics.drawImage(topImage, 0, 0, null);
+                graphics.drawImage(bottomImage, startX, 0, null);
+            }
+
+
             graphics.setColor(Color.BLACK);
-            graphics.drawString("Muminxxxxxxxxxxxxxxxxxxxx  "+i,10,100);
-            //long timeIndex=(long)(i*1000000000*(1/(float)framePS));
-            images.add(new ImageTime(image,i));
+            images.add(new ImageTime(image, i));
         }
-       return images;
+        return images;
     }
 
-    public BufferedImage createImage(int w, int h)
-    {
+    public BufferedImage createImage(int w, int h) {
         return new BufferedImage(w, h, BufferedImage.TYPE_3BYTE_BGR);
     }
 }

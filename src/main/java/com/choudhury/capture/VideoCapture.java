@@ -115,10 +115,13 @@ public class VideoCapture {
         }
         int imageWith = image.getWidth(null);
         int imageHeight = image.getHeight(null);
+        boolean transitionFrameOutputted=false;
         int counter = 24;
         for (int i = 0; i < counter; i++) {
             Graphics2D graphics = paintWhiteBackground(temporaryImage, width, height);
-            float percent = Math.min(i * 0.1f, 1.0f);
+            graphics.setColor(Color.BLACK);
+            graphics.drawRect(0, 0, width, height);
+            float percent = Math.min(0.3f+(i * 0.1f), 1.0f);
             graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, percent));
             graphics.drawImage(image, (width - imageWith) / 2, (height - imageHeight) / 2, null);
             graphics.setColor(Color.BLACK);
@@ -126,6 +129,12 @@ public class VideoCapture {
             String testStatus = passed ? "Test Passed" : "Test Failed";
             drawCenteredString(testName, testStatus, 1.0f, width, height, graphics, 10);
             BufferedImage bufferedImage = convertToType(temporaryImage, BufferedImage.TYPE_3BYTE_BGR);
+            if (!transitionFrameOutputted)
+            {
+                generateTransition(bufferedImage,TransitionDirection.BACKWARD,SlideType.SLIDE_OVER);
+                transitionFrameOutputted=true;
+            }
+
             long time = writer.getLastFrameTime() + (NANO_IN_SECOND / FPS);
             writer.encodeVideo(bufferedImage, time);
         }
@@ -219,7 +228,7 @@ public class VideoCapture {
                 try {
                     videoDumperLock.lock();
                     ImageTime take = imagesQueue.take();
-                    generateTransition(take);
+                    generateTransition(take.getBufferedImage(),TransitionDirection.FORWARD,SlideType.SLIDE_OVER);
                     while (!imagesQueue.isEmpty() || captureVideo.get()) {
                         processImage(imagesQueue);
                     }
@@ -235,8 +244,8 @@ public class VideoCapture {
         new Thread(consumerRunnable).start();
     }
 
-    private void generateTransition(ImageTime secondImage) {
-        TransitionGenerator generator = new TransitionGenerator(writer.getLastImage(), secondImage.getBufferedImage());
+    private void generateTransition(BufferedImage secondImage,TransitionDirection direction, SlideType slideType) {
+        TransitionGenerator generator = new TransitionGenerator(writer.getLastImage(), secondImage,direction,slideType);
         List<ImageTime> imageTimes = generator.generateImages(24);
         for (ImageTime imageTime : imageTimes) {
             BufferedImage tempImage = convertToType(imageTime.getBufferedImage(), BufferedImage.TYPE_3BYTE_BGR);
