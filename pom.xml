@@ -14,13 +14,22 @@
 
     <repositories>
         <repository>
-           <id>org.springframework.maven.snapshot</id>
-           <name>Spring Maven Snapshot Repository</name>
-           <url>http://maven.springframework.org/snapshot</url>
-           <snapshots>
-               <enabled>true</enabled>
-           </snapshots>
-       </repository>
+            <id>org.springframework.maven.snapshot</id>
+            <name>Spring Maven Snapshot Repository</name>
+            <url>http://maven.springframework.org/snapshot</url>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+
+        <repository>
+            <id>xuggleRepository</id>
+            <name>Xuggle Repository</name>
+            <url>
+                http://xuggle.googlecode.com/svn/trunk/repo/share/java
+            </url>
+        </repository>
+
 
     </repositories>
 
@@ -104,27 +113,40 @@
         </dependency>
 
         <dependency>
-			<groupId>com.thoughtworks.xstream</groupId>
-			<artifactId>xstream</artifactId>
-			<version>1.4.1</version>
-		</dependency>
-
-        <dependency>
-          <groupId>xpp3</groupId>
-          <artifactId>xpp3_min</artifactId>
-          <version>1.1.4c</version>
+            <groupId>com.thoughtworks.xstream</groupId>
+            <artifactId>xstream</artifactId>
+            <version>1.4.1</version>
         </dependency>
 
         <dependency>
-          <groupId>net.sf.kxml</groupId>
-          <artifactId>kxml2</artifactId>
-          <version>2.3.0</version>
+            <groupId>xpp3</groupId>
+            <artifactId>xpp3_min</artifactId>
+            <version>1.1.4c</version>
+        </dependency>
+
+        <dependency>
+            <groupId>net.sf.kxml</groupId>
+            <artifactId>kxml2</artifactId>
+            <version>2.3.0</version>
         </dependency>
 
         <dependency>
             <groupId>org.codehaus.jackson</groupId>
             <artifactId>jackson-mapper-asl</artifactId>
             <version>1.4.2</version>
+        </dependency>
+
+        <dependency>
+            <groupId>xuggle</groupId>
+            <artifactId>xuggle-xuggler</artifactId>
+            <version>3.4.1012.201001312056</version>
+            <scope>compile</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>1.6.2</version>
         </dependency>
 
         <!--
