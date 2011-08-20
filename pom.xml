@@ -127,6 +127,10 @@
             <version>1.4.2</version>
         </dependency>
 
+        <!--
+        Todo need to add dependency for xuggler
+        -->
+
     </dependencies>
     <build>
         <finalName>videocapture</finalName>

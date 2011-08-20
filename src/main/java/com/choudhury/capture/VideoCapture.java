@@ -1,40 +1,40 @@
 package com.choudhury.capture;
 
-
-import ch.randelshofer.media.avi.AVIOutputStream;
+import com.xuggle.mediatool.IMediaWriter;
+import com.xuggle.mediatool.ToolFactory;
+import com.xuggle.xuggler.IRational;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.io.*;
+import java.io.IOException;
+import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 
 public class VideoCapture {
-
-    private AVIOutputStream.VideoFormat format;
-    private int depth;
-    private float quality;
     private String projectName;
     private String testName;
-    private String targetVideoPath;
-    private File tempVideoPath;
+    private String videoOutputFile;
     private GraphicsDevice[] screens;
-    private AVIOutputStream aviOuput;
     private BufferedImage temporaryImage;
     private BufferedImage cursorImg;
     private boolean passed;
-    private Lock videoLock;
+    private Lock videoCaptureLock;
+    private Lock videoDumperLock;
     private boolean captureVideo = false;
-    private boolean useFFMpeg=false;
+    private IMediaWriter writer = null;
+    long startTime = -1;
 
     public static void main(String[] args) {
         try {
-            VideoCapture videoCapture = new VideoCapture(AVIOutputStream.VideoFormat.JPG, 24, 0.9f, "My Project", "Super Duper Test", "c:\\temp\\outputMumin.mp4",false);
+            VideoCapture videoCapture = new VideoCapture("My Project", "Super Duper Test", "c:\\temp\\testvideo.mp4");
             videoCapture.outputIntro();
             videoCapture.captureScreen();
-            Thread.sleep(10000);
+            Thread.sleep(8000);
+            videoCapture.setPassed(true);
             videoCapture.outputExit();
             videoCapture.close();
         } catch (Exception ex) {
@@ -42,68 +42,33 @@ public class VideoCapture {
         }
     }
 
-    public VideoCapture(AVIOutputStream.VideoFormat format, int depth, float quality, String projectName, String testName, String targetVideoPath, boolean useFFMpeg) throws IOException {
-        this.format = format;
-        this.depth = depth;
-        this.quality = quality;
+    public VideoCapture(String projectName, String testName, String videoOutputFile) throws IOException {
         this.projectName = projectName;
         this.testName = testName;
-        this.useFFMpeg = useFFMpeg;
-        this.targetVideoPath = targetVideoPath.replaceAll("\\|","/");
-        this.tempVideoPath = File.createTempFile("atvideo", ".avi");
-        this.videoLock = new ReentrantLock();
+        this.videoOutputFile = videoOutputFile.replaceAll("\\|", "/");
+        this.videoCaptureLock = new ReentrantLock();
+        this.videoDumperLock = new ReentrantLock();
         this.prepareVideo();
+        startTime = System.nanoTime();
     }
 
     public void setPassed(boolean passed) {
         this.passed = passed;
     }
 
-
-
-    public void runFFMpeg() throws IOException, InterruptedException {
-
-        ProcessBuilder pb = new ProcessBuilder("cmd", "/C start /B  /WAIT ffmpeg -threads 2 -i " + tempVideoPath.getAbsolutePath() + " -vcodec libx264 -b 3000k -r 24 -y " + this.targetVideoPath);
-        pb.start();
-        Process start = pb.start();
-        pipeOutput(start);
-        int result = start.waitFor();
-        System.out.println("Exit code " + result);
-    }
-
-    private static void pipeOutput(Process process) {
-        pipe(process.getErrorStream(), System.err);
-        pipe(process.getInputStream(), System.out);
-    }
-
-    private static void pipe(final InputStream src, final PrintStream dest) {
-        new Thread(new Runnable() {
-            public void run() {
-                try {
-                    byte[] buffer = new byte[1024];
-                    for (int n = 0; n != -1; n = src.read(buffer)) {
-                        dest.write(buffer, 0, n);
-                    }
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }).start();
-    }
-
-
     private void prepareVideo() throws IOException {
         GraphicsEnvironment graphenv = GraphicsEnvironment.getLocalGraphicsEnvironment();
         screens = graphenv.getScreenDevices();
         GraphicsDevice firstScreen = screens[0];
         DisplayMode mode = firstScreen.getDisplayMode();
-        aviOuput = null;
 
-        aviOuput = new AVIOutputStream(tempVideoPath, format, depth);
-        aviOuput.setVideoCompressionQuality(quality);
-
-        aviOuput.setTimeScale(1);
-        aviOuput.setFrameRate(12);
+        Rectangle bounds = new Rectangle(0, 0, mode.getWidth(), mode.getHeight());
+        IRational FRAME_RATE = IRational.make(12, 1);
+        writer = ToolFactory.makeWriter(videoOutputFile);
+        // We tell it we're going to add one video stream, with id 0,
+        // at position 0, and that it will have a fixed frame rate of
+        // FRAME_RATE.
+        writer.addVideoStream(0, 0, FRAME_RATE, bounds.width, bounds.height);
 
         temporaryImage = new BufferedImage(mode.getWidth(), mode.getHeight(), BufferedImage.TYPE_INT_RGB);
         cursorImg = ImageIO.read(this.getClass().getResourceAsStream("/images/cursor.png"));
@@ -112,46 +77,40 @@ public class VideoCapture {
 
     public void close() throws Exception {
         try {
-            videoLock.lock();
-            if (aviOuput != null) {
-                aviOuput.close();
+            videoCaptureLock.lock();
+            if (writer != null) {
+                writer.close();
             }
-            if (useFFMpeg)
-            {
-                runFFMpeg();
-                this.tempVideoPath.delete();
-            }
-            else
-            {
-                tempVideoPath.renameTo(new File(this.targetVideoPath));
-            }
-            aviOuput = null;
+            writer = null;
+            System.out.println("Video Generated, file = " + videoOutputFile);
 
         } finally {
-            videoLock.unlock();
+            videoCaptureLock.unlock();
         }
     }
 
-    public void outputIntro() throws IOException {
+    public void outputIntro() throws Exception {
         int width = temporaryImage.getWidth();
         int height = temporaryImage.getHeight();
-        writeIntroScreen(aviOuput, temporaryImage, width, height);
+        writeIntroScreen(writer, temporaryImage, width, height);
     }
 
 
-    public void outputExit() throws IOException {
+    public void outputExit() throws Exception {
         captureVideo = false;
         try {
-            videoLock.lock();
-            writeExitScreen();
+            videoCaptureLock.lock();
+            videoDumperLock.lock();
+            writeExitScreen(writer);
         } finally {
-            videoLock.unlock();
+            videoCaptureLock.unlock();
+            videoDumperLock.unlock();
         }
 
     }
 
 
-    private void writeExitScreen() throws IOException {
+    private void writeExitScreen(IMediaWriter out) throws Exception {
         int width = temporaryImage.getWidth();
         int height = temporaryImage.getHeight();
         Image image;
@@ -162,7 +121,7 @@ public class VideoCapture {
         }
         int imageWith = image.getWidth(null);
         int imageHeight = image.getHeight(null);
-        int counter = 100;
+        int counter = 30;
         for (int i = 0; i < counter; i++) {
             Graphics2D graphics = paintWhiteBackground(temporaryImage, width, height);
             float opacity = Math.min((i / (float) counter), 1.0f);
@@ -170,20 +129,25 @@ public class VideoCapture {
             graphics.drawImage(image, (width - imageWith) / 2, (height - imageHeight) / 2, null);
             graphics.setColor(Color.BLACK);
             graphics.setFont(new Font("Veranda", Font.BOLD, 18));
-            String testStatus=passed ? "Test Passed" : "Test Failed";
+            String testStatus = passed ? "Test Passed" : "Test Failed";
             drawCenteredString(testName, testStatus, width, height, graphics, 10);
-            aviOuput.writeFrame(temporaryImage);
+
+            BufferedImage bufferedImage = convertToType(temporaryImage, BufferedImage.TYPE_3BYTE_BGR);
+            out.encodeVideo(0, bufferedImage, System.nanoTime() - startTime, TimeUnit.NANOSECONDS);
+            Thread.sleep((int) ((1.0 / 12.0) * 1000.0));
         }
     }
 
-    private void writeIntroScreen(AVIOutputStream out, BufferedImage img, int width, int height) throws IOException {
-        int counter = 72;
+    private void writeIntroScreen(IMediaWriter writer, BufferedImage img, int width, int height) throws Exception {
+        int counter = 30;
         for (int i = 0; i < counter; i++) {
             float percent = Math.min((i / (float) counter), 1.0f);
             Graphics2D graphics = paintWhiteBackground(img, width, height);
             graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, percent));
             drawCenteredString(this.projectName, this.testName, width, height, graphics, 10);
-            out.writeFrame(img);
+            BufferedImage bufferedImage = convertToType(temporaryImage, BufferedImage.TYPE_3BYTE_BGR);
+            writer.encodeVideo(0, bufferedImage, System.nanoTime() - startTime, TimeUnit.NANOSECONDS);
+            Thread.sleep((int) ((1.0 / 12.0) * 1000.0));
         }
     }
 
@@ -222,35 +186,82 @@ public class VideoCapture {
     }
 
     public void captureScreen() {
-        captureVideo=true;
-        Runnable runnable = new Runnable() {
+        captureVideo = true;
+        final LinkedBlockingDeque<BufferedImage> imagesQueue = new LinkedBlockingDeque<BufferedImage>();
+
+        Runnable captureRunnable = new Runnable() {
             public void run() {
                 try {
                     GraphicsDevice screen = screens[0];
                     DisplayMode mode = screen.getDisplayMode();
                     Rectangle bounds = new Rectangle(0, 0, mode.getWidth(), mode.getHeight());
-                    videoLock.lock();
-                    while (captureVideo) {
+                    videoCaptureLock.lock();
+                    do {
                         BufferedImage screenCapture = new Robot(screen).createScreenCapture(bounds);
                         PointerInfo pointerInfo = MouseInfo.getPointerInfo();
                         Point location = pointerInfo.getLocation();
                         Graphics2D graphics = screenCapture.createGraphics();
                         graphics.drawImage(cursorImg, location.x, location.y, null);
-                        for (int i = 0; i < 12; i++) {
-                            aviOuput.writeFrame(screenCapture);
-                            aviOuput.writeFrame(screenCapture);
-                            aviOuput.writeFrame(screenCapture);
-                        }
-                    }
+                        imagesQueue.add(screenCapture);
+                        Thread.sleep(100);
+                    } while (captureVideo);
 
                 } catch (Exception e) {
 
                     e.printStackTrace();
                 } finally {
-                    videoLock.unlock();
+                    videoCaptureLock.unlock();
                 }
             }
         };
-        new Thread(runnable).start();
+
+
+        Runnable consumerRunnable = new Runnable() {
+            public void run() {
+                try {
+                    videoDumperLock.lock();
+                    do {
+                        try {
+                            BufferedImage bufferedImage = imagesQueue.take();
+                            for (int i = 0; i < 12; i++) {
+                                BufferedImage tempImage = convertToType(bufferedImage, BufferedImage.TYPE_3BYTE_BGR);
+                                writer.encodeVideo(0, tempImage, System.nanoTime() - startTime, TimeUnit.NANOSECONDS);
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    } while (captureVideo);
+                    while (!imagesQueue.isEmpty()) {
+                        try {
+                            BufferedImage bufferedImage = imagesQueue.take();
+                            for (int i = 0; i < 12; i++) {
+                                BufferedImage tempImage = convertToType(bufferedImage, BufferedImage.TYPE_3BYTE_BGR);
+                                writer.encodeVideo(0, tempImage, System.nanoTime() - startTime, TimeUnit.NANOSECONDS);
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
+                } finally {
+                    videoDumperLock.unlock();
+                }
+            }
+        };
+        new Thread(captureRunnable).start();
+        new Thread(consumerRunnable).start();
+    }
+
+
+    public static BufferedImage convertToType(BufferedImage sourceImage, int targetType) {
+        BufferedImage image;
+        if (sourceImage.getType() == targetType)
+            image = sourceImage;
+        else {
+            image = new BufferedImage(sourceImage.getWidth(),
+                    sourceImage.getHeight(), targetType);
+            image.getGraphics().drawImage(sourceImage, 0, 0, null);
+        }
+
+        return image;
     }
 }

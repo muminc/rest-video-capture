@@ -39,7 +39,7 @@ public class VideoController {
     public void stopRecording(@PathVariable("status") String status, @PathVariable("filename") String filename, @PathVariable("extension") String extension ) {
         try {
             videoCaptureService.stopRecording(filename+"."+extension,status.equalsIgnoreCase("pass"));
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }

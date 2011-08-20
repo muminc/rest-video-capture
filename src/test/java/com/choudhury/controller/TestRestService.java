@@ -10,12 +10,14 @@ import org.junit.Test;
  */
 public class TestRestService extends BaseWebApplicationContextTests {
 
+    private String videoFilename="c:|temp|testing.avi";
+
     @Test
     public void createRecording() throws Exception {
         request.setMethod("POST");
         request.addHeader("Accept", "application/xml");
         request.setContentType("application/xml");
-        request.setRequestURI("/videocapture/record/Our Project/Add Remove Products/testing.avi");
+        request.setRequestURI("/videocapture/record/Our Project/Add Remove Products/"+videoFilename);
         request.addHeader("Content-Type", "application/xml");
         servlet.service(request, response);
         String result = response.getContentAsString();
@@ -28,7 +30,7 @@ public class TestRestService extends BaseWebApplicationContextTests {
         request.setMethod("PUT");
         request.addHeader("Accept", "application/xml");
         request.setContentType("application/xml");
-        request.setRequestURI("/videocapture/stop/pass/testing.avi");
+        request.setRequestURI("/videocapture/stop/pass/"+videoFilename);
         request.addHeader("Content-Type", "application/xml");
         servlet.service(request, response);
         String result = response.getContentAsString();
@@ -42,7 +44,7 @@ public class TestRestService extends BaseWebApplicationContextTests {
         request.setMethod("DELETE");
         request.addHeader("Accept", "application/xml");
         request.setContentType("application/xml");
-        request.setRequestURI("/videocapture/delete/testing.avi");
+        request.setRequestURI("/videocapture/delete/"+videoFilename);
         request.addHeader("Content-Type", "application/xml");
         servlet.service(request, response);
         String result = response.getContentAsString();

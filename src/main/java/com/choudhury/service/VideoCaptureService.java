@@ -7,9 +7,9 @@ import java.io.IOException;
  */
 public interface VideoCaptureService {
 
-    public void stopRecording(String filename, boolean passed) throws IOException;
+    public void stopRecording(String filename, boolean passed) throws Exception;
 
-    public void startRecording(String projectName, String titleName,String fileName) throws IOException;
+    public void startRecording(String projectName, String titleName,String fileName) throws Exception;
 
     public void deleteRecording(String filename) throws Exception;
 
