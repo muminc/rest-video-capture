@@ -78,6 +78,7 @@ public class VideoCapture {
     public void close() throws Exception {
         try {
             videoCaptureLock.lock();
+            videoDumperLock.lock();
             if (writer != null) {
                 writer.close();
             }
@@ -86,6 +87,7 @@ public class VideoCapture {
 
         } finally {
             videoCaptureLock.unlock();
+            videoDumperLock.unlock();
         }
     }
 
@@ -154,12 +156,10 @@ public class VideoCapture {
 
     private Graphics2D paintWhiteBackground(BufferedImage img, int width, int height) {
         Graphics2D graphics = img.createGraphics();
-
         graphics.setRenderingHint(RenderingHints.KEY_DITHERING, RenderingHints.VALUE_DITHER_DISABLE);
         graphics.setRenderingHint(RenderingHints.KEY_COLOR_RENDERING, RenderingHints.VALUE_COLOR_RENDER_SPEED);
         graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_SPEED);
         graphics.setColor(Color.WHITE);
-
         graphics.fillRect(0, 0, width, height);
         return graphics;
     }
@@ -186,9 +186,9 @@ public class VideoCapture {
     }
 
     public void captureScreen() {
+        System.out.println("Starting video capture");
         captureVideo = true;
         final LinkedBlockingDeque<BufferedImage> imagesQueue = new LinkedBlockingDeque<BufferedImage>();
-
         Runnable captureRunnable = new Runnable() {
             public void run() {
                 try {
@@ -214,7 +214,6 @@ public class VideoCapture {
                 }
             }
         };
-
 
         Runnable consumerRunnable = new Runnable() {
             public void run() {
