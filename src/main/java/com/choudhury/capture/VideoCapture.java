@@ -1,20 +1,21 @@
 package com.choudhury.capture;
 
-import com.xuggle.mediatool.IMediaWriter;
-import com.xuggle.mediatool.ToolFactory;
-import com.xuggle.xuggler.IRational;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.util.List;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 
 public class VideoCapture {
+    public static final int NANO_IN_SECOND = 1000000000;
+    public static final int FPS = 12;
     private String projectName;
     private String testName;
     private String videoOutputFile;
@@ -24,9 +25,9 @@ public class VideoCapture {
     private boolean passed;
     private Lock videoCaptureLock;
     private Lock videoDumperLock;
-    private boolean captureVideo = false;
-    private IMediaWriter writer = null;
-    long startTime = -1;
+    private AtomicBoolean captureVideo = new AtomicBoolean(false);
+    private VideoWriter writer;
+
 
     public static void main(String[] args) {
         try {
@@ -49,7 +50,6 @@ public class VideoCapture {
         this.videoCaptureLock = new ReentrantLock();
         this.videoDumperLock = new ReentrantLock();
         this.prepareVideo();
-        startTime = System.nanoTime();
     }
 
     public void setPassed(boolean passed) {
@@ -61,15 +61,8 @@ public class VideoCapture {
         screens = graphenv.getScreenDevices();
         GraphicsDevice firstScreen = screens[0];
         DisplayMode mode = firstScreen.getDisplayMode();
-
         Rectangle bounds = new Rectangle(0, 0, mode.getWidth(), mode.getHeight());
-        IRational FRAME_RATE = IRational.make(12, 1);
-        writer = ToolFactory.makeWriter(videoOutputFile);
-        // We tell it we're going to add one video stream, with id 0,
-        // at position 0, and that it will have a fixed frame rate of
-        // FRAME_RATE.
-        writer.addVideoStream(0, 0, FRAME_RATE, bounds.width, bounds.height);
-
+        writer = new VideoWriter(videoOutputFile, bounds);
         temporaryImage = new BufferedImage(mode.getWidth(), mode.getHeight(), BufferedImage.TYPE_INT_RGB);
         cursorImg = ImageIO.read(this.getClass().getResourceAsStream("/images/cursor.png"));
 
@@ -99,7 +92,7 @@ public class VideoCapture {
 
 
     public void outputExit() throws Exception {
-        captureVideo = false;
+        captureVideo.set(false);
         try {
             videoCaptureLock.lock();
             videoDumperLock.lock();
@@ -108,11 +101,10 @@ public class VideoCapture {
             videoCaptureLock.unlock();
             videoDumperLock.unlock();
         }
-
     }
 
 
-    private void writeExitScreen(IMediaWriter out) throws Exception {
+    private void writeExitScreen(VideoWriter writer) throws Exception {
         int width = temporaryImage.getWidth();
         int height = temporaryImage.getHeight();
         Image image;
@@ -123,33 +115,36 @@ public class VideoCapture {
         }
         int imageWith = image.getWidth(null);
         int imageHeight = image.getHeight(null);
-        int counter = 30;
+        int counter = 24;
         for (int i = 0; i < counter; i++) {
             Graphics2D graphics = paintWhiteBackground(temporaryImage, width, height);
-            float opacity = Math.min((i / (float) counter), 1.0f);
-            graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, opacity));
+            float percent = Math.min(i * 0.1f, 1.0f);
+            graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, percent));
             graphics.drawImage(image, (width - imageWith) / 2, (height - imageHeight) / 2, null);
             graphics.setColor(Color.BLACK);
             graphics.setFont(new Font("Veranda", Font.BOLD, 18));
             String testStatus = passed ? "Test Passed" : "Test Failed";
-            drawCenteredString(testName, testStatus, width, height, graphics, 10);
-
+            drawCenteredString(testName, testStatus, 1.0f, width, height, graphics, 10);
             BufferedImage bufferedImage = convertToType(temporaryImage, BufferedImage.TYPE_3BYTE_BGR);
-            out.encodeVideo(0, bufferedImage, System.nanoTime() - startTime, TimeUnit.NANOSECONDS);
-            Thread.sleep((int) ((1.0 / 12.0) * 1000.0));
+            long time = writer.getLastFrameTime() + (NANO_IN_SECOND / FPS);
+            writer.encodeVideo(bufferedImage, time);
         }
     }
 
-    private void writeIntroScreen(IMediaWriter writer, BufferedImage img, int width, int height) throws Exception {
+    private void writeIntroScreen(VideoWriter writer, BufferedImage img, int width, int height) throws Exception {
         int counter = 30;
         for (int i = 0; i < counter; i++) {
             float percent = Math.min((i / (float) counter), 1.0f);
             Graphics2D graphics = paintWhiteBackground(img, width, height);
+            graphics.setColor(Color.BLACK);
+            graphics.drawRect(0, 0, width, height);
             graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, percent));
-            drawCenteredString(this.projectName, this.testName, width, height, graphics, 10);
+            float textPercentage = Math.min(i * 0.1f, 1.0f);
+            drawCenteredString(this.projectName, this.testName, textPercentage, width, height, graphics, 10);
             BufferedImage bufferedImage = convertToType(temporaryImage, BufferedImage.TYPE_3BYTE_BGR);
-            writer.encodeVideo(0, bufferedImage, System.nanoTime() - startTime, TimeUnit.NANOSECONDS);
-            Thread.sleep((int) ((1.0 / 12.0) * 1000.0));
+            long time = writer.getLastFrameTime() + (NANO_IN_SECOND / FPS);
+
+            writer.encodeVideo(bufferedImage, time);
         }
     }
 
@@ -165,7 +160,7 @@ public class VideoCapture {
     }
 
 
-    public void drawCenteredString(String title, String s, int w, int h, Graphics2D gIn, int newLineGap) {
+    public void drawCenteredString(String title, String s, float percent, int w, int h, Graphics2D gIn, int newLineGap) {
         String[] msgs = s.split("\\n");
         Graphics g = gIn.create();
         g.setColor(Color.BLACK);
@@ -180,15 +175,16 @@ public class VideoCapture {
         for (int i = 0; i < msgs.length; i++) {
             FontMetrics fm = g.getFontMetrics();
             int x = (w - fm.stringWidth(msgs[i])) / 2;
-            int y = (((fm.getAscent() + newLineGap) * (i + 2)) + (h - (fm.getAscent() + fm.getDescent())) / 2);
-            g.drawString(msgs[i], x, y);
+            int centeredY = (((fm.getAscent() + newLineGap) * (i + 2)) + (h - (fm.getAscent() + fm.getDescent())) / 2);
+            int animatedY = (int) (h - (h - (centeredY)) * percent);
+            g.drawString(msgs[i], x, animatedY);
         }
     }
 
     public void captureScreen() {
         System.out.println("Starting video capture");
-        captureVideo = true;
-        final LinkedBlockingDeque<BufferedImage> imagesQueue = new LinkedBlockingDeque<BufferedImage>();
+        captureVideo.set(true);
+        final LinkedBlockingDeque<ImageTime> imagesQueue = new LinkedBlockingDeque<ImageTime>();
         Runnable captureRunnable = new Runnable() {
             public void run() {
                 try {
@@ -196,15 +192,18 @@ public class VideoCapture {
                     DisplayMode mode = screen.getDisplayMode();
                     Rectangle bounds = new Rectangle(0, 0, mode.getWidth(), mode.getHeight());
                     videoCaptureLock.lock();
+                    long lastCaptureTime;
                     do {
                         BufferedImage screenCapture = new Robot(screen).createScreenCapture(bounds);
+                        lastCaptureTime = System.nanoTime();
                         PointerInfo pointerInfo = MouseInfo.getPointerInfo();
                         Point location = pointerInfo.getLocation();
                         Graphics2D graphics = screenCapture.createGraphics();
                         graphics.drawImage(cursorImg, location.x, location.y, null);
-                        imagesQueue.add(screenCapture);
-                        Thread.sleep(100);
-                    } while (captureVideo);
+                        imagesQueue.add(new ImageTime(screenCapture, lastCaptureTime));
+                        Thread.sleep(50);
+                    } while (captureVideo.get());
+                    System.out.println("Finished video capturing, waiting for video encoding to complete.");
 
                 } catch (Exception e) {
 
@@ -219,35 +218,45 @@ public class VideoCapture {
             public void run() {
                 try {
                     videoDumperLock.lock();
-                    do {
-                        try {
-                            BufferedImage bufferedImage = imagesQueue.take();
-                            for (int i = 0; i < 12; i++) {
-                                BufferedImage tempImage = convertToType(bufferedImage, BufferedImage.TYPE_3BYTE_BGR);
-                                writer.encodeVideo(0, tempImage, System.nanoTime() - startTime, TimeUnit.NANOSECONDS);
-                            }
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-                    } while (captureVideo);
-                    while (!imagesQueue.isEmpty()) {
-                        try {
-                            BufferedImage bufferedImage = imagesQueue.take();
-                            for (int i = 0; i < 12; i++) {
-                                BufferedImage tempImage = convertToType(bufferedImage, BufferedImage.TYPE_3BYTE_BGR);
-                                writer.encodeVideo(0, tempImage, System.nanoTime() - startTime, TimeUnit.NANOSECONDS);
-                            }
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
+                    ImageTime take = imagesQueue.take();
+                    generateTransition(take);
+                    while (!imagesQueue.isEmpty() || captureVideo.get()) {
+                        processImage(imagesQueue);
                     }
+                } catch (Exception e) {
+                    e.printStackTrace();
                 } finally {
                     videoDumperLock.unlock();
                 }
+                System.out.println("Capture processing complete");
             }
         };
         new Thread(captureRunnable).start();
         new Thread(consumerRunnable).start();
+    }
+
+    private void generateTransition(ImageTime secondImage) {
+        TransitionGenerator generator = new TransitionGenerator(writer.getLastImage(), secondImage.getBufferedImage());
+        List<ImageTime> imageTimes = generator.generateImages(24);
+        for (ImageTime imageTime : imageTimes) {
+            BufferedImage tempImage = convertToType(imageTime.getBufferedImage(), BufferedImage.TYPE_3BYTE_BGR);
+            long time = writer.getLastFrameTime() + (NANO_IN_SECOND / FPS);
+            writer.encodeVideo(tempImage, time);
+        }
+    }
+
+    private void processImage(LinkedBlockingDeque<ImageTime> imagesQueue) {
+        try {
+            ImageTime take = imagesQueue.poll(5, TimeUnit.SECONDS);
+            if (take != null) {
+                BufferedImage bufferedImage = take.getBufferedImage();
+                BufferedImage tempImage = convertToType(bufferedImage, BufferedImage.TYPE_3BYTE_BGR);
+                writer.encodeVideo(tempImage, take.getTime());
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
 
@@ -256,8 +265,7 @@ public class VideoCapture {
         if (sourceImage.getType() == targetType)
             image = sourceImage;
         else {
-            image = new BufferedImage(sourceImage.getWidth(),
-                    sourceImage.getHeight(), targetType);
+            image = new BufferedImage(sourceImage.getWidth(), sourceImage.getHeight(), targetType);
             image.getGraphics().drawImage(sourceImage, 0, 0, null);
         }
 
