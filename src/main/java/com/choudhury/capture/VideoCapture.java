@@ -1,6 +1,5 @@
 package com.choudhury.capture;
 
-
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
@@ -11,8 +10,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-
+/**
+ * Please make sure you have xuggle installed
+ */
 public class VideoCapture {
     public static final int NANO_IN_SECOND = 1000000000;
     public static final int FPS = 12;
@@ -28,7 +31,10 @@ public class VideoCapture {
     private AtomicBoolean captureVideo = new AtomicBoolean(false);
     private VideoWriter writer;
 
+    private static Logger log=Logger.getLogger(VideoCapture.class.getName());
 
+
+    //Before running this program, make sure you have xuggle installed.
     public static void main(String[] args) {
         try {
             VideoCapture videoCapture = new VideoCapture("My Project", "Super Duper Test", "c:\\temp\\testvideo.mp4");
@@ -64,7 +70,13 @@ public class VideoCapture {
         Rectangle bounds = new Rectangle(0, 0, mode.getWidth(), mode.getHeight());
         writer = new VideoWriter(videoOutputFile, bounds);
         temporaryImage = new BufferedImage(mode.getWidth(), mode.getHeight(), BufferedImage.TYPE_INT_RGB);
-        cursorImg = ImageIO.read(this.getClass().getResourceAsStream("/images/cursor.png"));
+        try{
+            cursorImg = ImageIO.read(this.getClass().getResourceAsStream("/images/cursor.png"));
+        }
+        catch (Exception e)
+        {
+            log.log(Level.WARNING,"Unable to to load mouse cursor png",e);
+        }
 
     }
 
@@ -108,10 +120,18 @@ public class VideoCapture {
         int width = temporaryImage.getWidth();
         int height = temporaryImage.getHeight();
         Image image;
+        try
+        {
         if (passed) {
             image = ImageIO.read(this.getClass().getResourceAsStream("/images/greentick.png"));
         } else {
             image = ImageIO.read(this.getClass().getResourceAsStream("/images/redx.png"));
+        }
+        }
+        catch (Exception e)
+        {
+            log.log(Level.WARNING,"Unable to load status image",e);
+            return;
         }
         int imageWith = image.getWidth(null);
         int imageHeight = image.getHeight(null);
@@ -208,7 +228,10 @@ public class VideoCapture {
                         PointerInfo pointerInfo = MouseInfo.getPointerInfo();
                         Point location = pointerInfo.getLocation();
                         Graphics2D graphics = screenCapture.createGraphics();
-                        graphics.drawImage(cursorImg, location.x, location.y, null);
+                        if (cursorImg!=null)
+                        {
+                            graphics.drawImage(cursorImg, location.x, location.y, null);
+                        }
                         imagesQueue.add(new ImageTime(screenCapture, lastCaptureTime));
                         Thread.sleep(50);
                     } while (captureVideo.get());
