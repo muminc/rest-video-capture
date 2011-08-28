@@ -1,6 +1,7 @@
 package com.choudhury.impl;
 
 import com.choudhury.capture.VideoCapture;
+import com.choudhury.capture.VideoCaptureType;
 import com.choudhury.service.VideoCaptureService;
 import org.apache.log4j.Logger;
 import org.springframework.stereotype.Service;
@@ -26,7 +27,7 @@ public class VideoCaptureServiceImpl implements VideoCaptureService {
 
 
     public void startRecording(String projectName, String title, String fileName) throws Exception {
-        VideoCapture videoCapture = new VideoCapture(projectName, title, fileName);
+        VideoCapture videoCapture = new VideoCapture(projectName, title, fileName, VideoCaptureType.ROBOT);
         map.put(fileName, videoCapture);
         videoCapture.outputIntro();
         videoCapture.captureScreen();

@@ -30,28 +30,25 @@ public class VideoCapture {
     private Lock videoDumperLock;
     private AtomicBoolean captureVideo = new AtomicBoolean(false);
     private VideoWriter writer;
+    private int maxFrameCapacity=Integer.MAX_VALUE;
+    private VideoCaptureType videoCaptureType;
 
     private static Logger log=Logger.getLogger(VideoCapture.class.getName());
 
 
     //Before running this program, make sure you have xuggle installed.
-    public static void main(String[] args) {
-        try {
-            VideoCapture videoCapture = new VideoCapture("My Project", "Super Duper Test", "c:\\temp\\testvideo.mp4");
-            videoCapture.outputIntro();
-            videoCapture.captureScreen();
-            Thread.sleep(8000);
-            videoCapture.setPassed(true);
-            videoCapture.outputExit();
-            videoCapture.close();
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
+
+
+    public VideoCapture(String projectName, String testName, String videoOutputFile, VideoCaptureType videoCaptureType) throws IOException
+    {
+        this(projectName,testName,videoOutputFile,videoCaptureType,Integer.MAX_VALUE);
     }
 
-    public VideoCapture(String projectName, String testName, String videoOutputFile) throws IOException {
+    public VideoCapture(String projectName, String testName, String videoOutputFile, VideoCaptureType videoCaptureType,int maxFrameCapacity) throws IOException {
         this.projectName = projectName;
         this.testName = testName;
+        this.videoCaptureType = videoCaptureType;
+        this.maxFrameCapacity = maxFrameCapacity;
         this.videoOutputFile = videoOutputFile.replaceAll("\\|", "/");
         this.videoCaptureLock = new ReentrantLock();
         this.videoDumperLock = new ReentrantLock();
@@ -213,38 +210,20 @@ public class VideoCapture {
     public void captureScreen() {
         System.out.println("Starting video capture");
         captureVideo.set(true);
-        final LinkedBlockingDeque<ImageTime> imagesQueue = new LinkedBlockingDeque<ImageTime>();
-        Runnable captureRunnable = new Runnable() {
-            public void run() {
-                try {
-                    GraphicsDevice screen = screens[0];
-                    DisplayMode mode = screen.getDisplayMode();
-                    Rectangle bounds = new Rectangle(0, 0, mode.getWidth(), mode.getHeight());
-                    videoCaptureLock.lock();
-                    long lastCaptureTime;
-                    do {
-                        BufferedImage screenCapture = new Robot(screen).createScreenCapture(bounds);
-                        lastCaptureTime = System.nanoTime();
-                        PointerInfo pointerInfo = MouseInfo.getPointerInfo();
-                        Point location = pointerInfo.getLocation();
-                        Graphics2D graphics = screenCapture.createGraphics();
-                        if (cursorImg!=null)
-                        {
-                            graphics.drawImage(cursorImg, location.x, location.y, null);
-                        }
-                        imagesQueue.add(new ImageTime(screenCapture, lastCaptureTime));
-                        Thread.sleep(50);
-                    } while (captureVideo.get());
-                    System.out.println("Finished video capturing, waiting for video encoding to complete.");
+        final LinkedBlockingDeque<ImageTime> imagesQueue = new LinkedBlockingDeque<ImageTime>(maxFrameCapacity);
 
-                } catch (Exception e) {
-
-                    e.printStackTrace();
-                } finally {
-                    videoCaptureLock.unlock();
-                }
-            }
-        };
+        Runnable videoCaptureRunnable;
+        switch (videoCaptureType)
+        {
+            case ROBOT:
+                videoCaptureRunnable=new RobotVideoCapture(captureVideo,screens[0],videoCaptureLock,cursorImg,imagesQueue);
+                break;
+            case SWING:
+                videoCaptureRunnable=new SwingFrameCapture(captureVideo,screens[0],videoCaptureLock,cursorImg,imagesQueue);
+                break;
+            default:
+                throw new UnsupportedOperationException("Unsupported video capture type "+videoCaptureType.name());
+        }
 
         Runnable consumerRunnable = new Runnable() {
             public void run() {
@@ -263,7 +242,7 @@ public class VideoCapture {
                 System.out.println("Capture processing complete");
             }
         };
-        new Thread(captureRunnable).start();
+        new Thread(videoCaptureRunnable).start();
         new Thread(consumerRunnable).start();
     }
 
