@@ -18,6 +18,7 @@ public class TestSwingVideoCapture {
                videoCapture.setPassed(true);
                videoCapture.outputExit();
                videoCapture.close();
+               System.exit(0);
            } catch (Exception ex) {
                ex.printStackTrace();
            }
